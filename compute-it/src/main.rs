@@ -1,9 +1,33 @@
 //#![allow(warnings)]
-use uninutsh_framework::ui::window::Window;
+//use std::time::Duration;
+use uninutsh_framework::ui::window::{EventHandler, Window, WindowEvent};
+
+struct ComputeItHandler {}
+
+impl ComputeItHandler {
+    fn new() -> ComputeItHandler {
+        ComputeItHandler {}
+    }
+    fn boxed() -> Box<ComputeItHandler> {
+        Box::new(ComputeItHandler::new())
+    }
+}
+
+impl EventHandler for ComputeItHandler {
+    fn handle_event(&mut self, event: WindowEvent, window: &mut Window) {
+        match event {
+            WindowEvent::Update(_delta) => {
+                //println!("update {}", delta.as_millis());
+                window.redraw();
+            }
+            WindowEvent::Exit => {
+                window.close();
+            }
+        }
+    }
+}
 
 fn main() {
-    println!("Hello, world!");
-    uninutsh_framework::greet();
-    let window = Window::new("compute-it");
+    let window = Window::new("compute-it", Some(ComputeItHandler::boxed()));
     window.event_loop();
 }
