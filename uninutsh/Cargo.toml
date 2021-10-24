@@ -1,9 +1,13 @@
 [package]
-name = "compute-it"
+name = "uninutsh"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-uninutsh = { path = "../uninutsh" }
+glutin = "0.27.0"
+gl = "0.14.0"
+image = "0.23.14"
+imageproc = "0.22.0"
+palette = "0.6.0"

@@ -56,14 +56,15 @@ impl Data {
         let el = EventLoop::<CustomEvent>::with_user_event();
         let proxy = Some(el.create_proxy());
         let monitor = el.primary_monitor().unwrap();
-        let width = 1024; //
-        let height = 512;
+        let width = 1280; //
+        let height = 720;
         let x = monitor.size().width / 2 - width / 2;
         let y = monitor.size().height / 2 - height / 2;
         let window_builder = WindowBuilder::new()
             .with_title(title)
             .with_inner_size(PhysicalSize::new(width, height))
-            .with_position(PhysicalPosition::new(x, y));
+            .with_position(PhysicalPosition::new(x, y))
+            .with_min_inner_size(PhysicalSize::new(512, 256));
         let context_builder = ContextBuilder::new()
             .build_windowed(window_builder, &el)
             .unwrap();
@@ -76,17 +77,17 @@ impl Data {
         let mut framebuffer = 0;
         unsafe {
             gl::GenFramebuffers(1, &mut framebuffer);
-            panic_gl("gl::GenFramebuffers(1, &mut framebuffer);");
+            panic_gl("gl::GenFramebuffers");
             gl::BindFramebuffer(gl::READ_FRAMEBUFFER, framebuffer);
-            panic_gl("gl::BindFramebuffer(gl::READ_FRAMEBUFFER, framebuffer);");
+            panic_gl("gl::BindFramebuffer");
         }
         let mut texture = 0;
         unsafe {
             gl::GenTextures(1, &mut texture);
-            panic_gl("gl::GenTextures(1, &mut texture);");
+            panic_gl("gl::GenTextures");
 
             gl::BindTexture(gl::TEXTURE_2D, texture);
-            panic_gl("gl::BindTexture(gl::TEXTURE_2D, texture);");
+            panic_gl("gl::BindTexture");
         }
         Data {
             texture,
@@ -99,15 +100,8 @@ impl Data {
     pub fn event_loop(mut self, mut window: super::Window) {
         let event_loop = self.event_loop.take().unwrap();
         let _proxy = self.proxy.take().unwrap();
-        let sprite_width = window.sprite.width() as i32;
-        let sprite_height = window.sprite.height() as i32;
-        //sprite_buffer.width();
-        let pixels = window.sprite.take_pixels();
-        //let pixels_box = Box::into_raw(pixels.into_boxed_slice());
-        println!("{}", (*pixels)[0]);
-        println!("{}", (*pixels)[1]);
-        println!("{}", (*pixels)[2]);
-        println!("{}", (*pixels)[3]);
+        let sprite_width = window.graphics.width() as i32;
+        let sprite_height = window.graphics.height() as i32;
 
         let mut event_handler = window.handler.take();
         unsafe {
@@ -120,21 +114,9 @@ impl Data {
                 0,
                 gl::RGBA,
                 gl::UNSIGNED_BYTE,
-                pixels.as_ptr() as *const c_void,
+                window.pixels_ptr(),
             );
-            panic_gl(
-                "gl::TexImage2D(
-                gl::TEXTURE_2D,
-                0,
-                gl::RGBA8 as i32,
-                sprite_width,
-                sprite_height,
-                0,
-                gl::RGBA,
-                gl::BYTE,
-                sprite_pointer,
-            );",
-            );
+            panic_gl("gl::TexImage2D");
 
             gl::FramebufferTexture2D(
                 gl::READ_FRAMEBUFFER,
@@ -143,22 +125,10 @@ impl Data {
                 self.texture,
                 0,
             );
-            panic_gl(
-                "gl::FramebufferTexture2D(
-                gl::READ_FRAMEBUFFER,
-                gl::COLOR_ATTACHMENT0,
-                gl::TEXTURE_2D,
-                self.texture,
-                0,
-            );",
-            );
+            panic_gl("gl::FramebufferTexture2D");
         }
-        //let _sprite: Box<Sprite> = unsafe { Box::from_raw(sprite_pointer as *mut Sprite) };
         let mut last_update_instant = Instant::now();
         event_loop.run(move |event, _el_window_target, control_flow| {
-            //_el_window_target;
-            //println!("event received");
-
             match event {
                 Event::UserEvent(_event) => (),
                 Event::LoopDestroyed => {
@@ -171,15 +141,38 @@ impl Data {
                         }
                         None => {}
                     },
+                    WindowEvent::Resized(size) => {
+                        window.update_rectangle(size.width as i32, size.height as i32);
+                    }
                     _ => (),
                 },
                 Event::RedrawRequested(_) => {
+                    match &mut event_handler {
+                        Some(handler) => {
+                            let graphics = window.graphics();
+                            handler.handle_event(super::WindowEvent::Draw(graphics), &mut window);
+                        }
+                        None => {}
+                    }
                     unsafe {
-                        gl::ClearColor(1., 1., 1., 1.);
-                        panic_gl("gl::ClearColor(1., 1., 1., 1.);");
+                        gl::ClearColor(0., 0., 0., 1.);
+                        panic_gl("gl::ClearColor");
 
                         gl::Clear(gl::COLOR_BUFFER_BIT);
-                        panic_gl("gl::Clear(gl::COLOR_BUFFER_BIT);");
+                        panic_gl("gl::Clear");
+
+                        gl::TexSubImage2D(
+                            gl::TEXTURE_2D,
+                            0,
+                            0,
+                            0,
+                            sprite_width,
+                            sprite_height,
+                            gl::RGBA,
+                            gl::UNSIGNED_BYTE,
+                            window.pixels_ptr(),
+                        );
+                        panic_gl("gl::TexSubImage2D");
 
                         gl::BlitNamedFramebuffer(
                             self.framebuffer,
@@ -188,29 +181,14 @@ impl Data {
                             0,
                             sprite_width,
                             sprite_height,
-                            0,
-                            0,
-                            1024,
-                            512,
+                            window.rectangle.position.x,
+                            window.rectangle.position.y,
+                            window.rectangle.position.x + window.rectangle.size.x,
+                            window.rectangle.position.y + window.rectangle.size.y,
                             gl::COLOR_BUFFER_BIT,
                             gl::NEAREST,
                         );
-                        panic_gl(
-                            "gl::BlitNamedFramebuffer(
-                            self.framebuffer,
-                            0,
-                            0,
-                            0,
-                            512,
-                            256,
-                            0,
-                            0,
-                            sprite_width,
-                            sprite_height,
-                            gl::COLOR_BUFFER_BIT,
-                            gl::NEAREST,
-                        );",
-                        );
+                        panic_gl("gl::BlitNamedFramebuffer");
                     }
                     self.gl_window.swap_buffers().unwrap();
                     //println!("redraw")
@@ -218,8 +196,7 @@ impl Data {
                 _ => (),
             }
             let delta = last_update_instant.elapsed();
-            if delta >= Duration::from_millis(20) {
-                //println!("update {}", last_update_instant.elapsed().as_millis());
+            if delta >= Duration::from_millis(16) {
                 match &mut event_handler {
                     Some(handler) => {
                         handler.handle_event(super::WindowEvent::Update(delta), &mut window);
@@ -227,7 +204,6 @@ impl Data {
                     None => {}
                 }
 
-                //self.gl_window.window().request_redraw();
                 last_update_instant = Instant::now();
             }
             if window.must_redraw {

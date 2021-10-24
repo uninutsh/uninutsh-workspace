@@ -1,6 +1,6 @@
 //#![allow(warnings)]
 //use std::time::Duration;
-use uninutsh_framework::ui::window::{EventHandler, Window, WindowEvent};
+use uninutsh::ui::window::{EventHandler, Window, WindowEvent};
 
 struct ComputeItHandler {}
 
@@ -23,6 +23,7 @@ impl EventHandler for ComputeItHandler {
             WindowEvent::Exit => {
                 window.close();
             }
+            _ => {}
         }
     }
 }
