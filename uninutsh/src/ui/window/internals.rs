@@ -6,7 +6,6 @@ use glutin::{
     window::{Window, WindowBuilder},
     ContextBuilder, ContextWrapper, PossiblyCurrent,
 };
-use std::ffi::c_void;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy)]
@@ -102,7 +101,8 @@ impl Data {
         let _proxy = self.proxy.take().unwrap();
         let sprite_width = window.graphics.width() as i32;
         let sprite_height = window.graphics.height() as i32;
-
+        let size = self.gl_window.window().inner_size();
+        window.update_rectangle(size.width as i32, size.height as i32);
         let mut event_handler = window.handler.take();
         unsafe {
             gl::TexImage2D(
