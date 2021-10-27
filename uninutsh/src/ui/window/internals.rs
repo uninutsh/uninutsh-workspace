@@ -6,7 +6,7 @@ use glutin::{
     window::{Window, WindowBuilder},
     ContextBuilder, ContextWrapper, PossiblyCurrent,
 };
-use std::time::{Duration, Instant};
+use std::{ffi::c_void, time::{Duration, Instant}};
 
 #[derive(Debug, Clone, Copy)]
 pub enum CustomEvent {}
@@ -99,11 +99,12 @@ impl Data {
     pub fn event_loop(mut self, mut window: super::Window) {
         let event_loop = self.event_loop.take().unwrap();
         let _proxy = self.proxy.take().unwrap();
-        let sprite_width = window.graphics.width() as i32;
-        let sprite_height = window.graphics.height() as i32;
+        let sprite_width = window.graphics_width().expect("Can not find graphics object") as i32;
+        let sprite_height = window.graphics_height().expect("Can not find graphics object") as i32;
         let size = self.gl_window.window().inner_size();
         window.update_rectangle(size.width as i32, size.height as i32);
         let mut event_handler = window.handler.take();
+        let pixels = window.pixels().expect("can not take the pixels");
         unsafe {
             gl::TexImage2D(
                 gl::TEXTURE_2D,
@@ -114,7 +115,7 @@ impl Data {
                 0,
                 gl::RGBA,
                 gl::UNSIGNED_BYTE,
-                window.pixels_ptr(),
+                pixels.as_ptr() as *const c_void,
             );
             panic_gl("gl::TexImage2D");
 
@@ -127,6 +128,7 @@ impl Data {
             );
             panic_gl("gl::FramebufferTexture2D");
         }
+        window.return_pixels(Some(pixels));
         let mut last_update_instant = Instant::now();
         event_loop.run(move |event, _el_window_target, control_flow| {
             match event {
@@ -149,11 +151,11 @@ impl Data {
                 Event::RedrawRequested(_) => {
                     match &mut event_handler {
                         Some(handler) => {
-                            let graphics = window.graphics();
-                            handler.handle_event(super::WindowEvent::Draw(graphics), &mut window);
+                            handler.handle_event(super::WindowEvent::Draw, &mut window);
                         }
                         None => {}
                     }
+                    let pixels = window.pixels().expect("can not take the pixels for updating");
                     unsafe {
                         gl::ClearColor(0., 0., 0., 1.);
                         panic_gl("gl::ClearColor");
@@ -170,9 +172,10 @@ impl Data {
                             sprite_height,
                             gl::RGBA,
                             gl::UNSIGNED_BYTE,
-                            window.pixels_ptr(),
+                            pixels.as_ptr() as *const c_void,
                         );
                         panic_gl("gl::TexSubImage2D");
+                        window.return_pixels(Some(pixels));
 
                         gl::BlitNamedFramebuffer(
                             self.framebuffer,
@@ -196,7 +199,7 @@ impl Data {
                 _ => (),
             }
             let delta = last_update_instant.elapsed();
-            if delta >= Duration::from_millis(16) {
+            if delta >= Duration::from_millis(16) && !window.must_close {
                 match &mut event_handler {
                     Some(handler) => {
                         handler.handle_event(super::WindowEvent::Update(delta), &mut window);

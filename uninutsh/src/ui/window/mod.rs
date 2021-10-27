@@ -1,14 +1,11 @@
 mod internals;
 use crate::image::Graphics;
 use crate::Rectangle;
-use std::ffi::c_void;
-use std::rc::Rc;
-use std::rc::Weak;
 use std::time::Duration;
 
 pub enum WindowEvent {
     Update(Duration),
-    Draw(Weak<Graphics>),
+    Draw,
     Exit,
 }
 
@@ -19,7 +16,7 @@ pub trait EventHandler {
 pub struct Window {
     size_ratio: f64,
     rectangle: Rectangle<i32>,
-    graphics: Rc<Graphics>,
+    graphics: Option<Graphics>,
     internals: Option<internals::Data>,
     handler: Option<Box<dyn EventHandler>>,
     must_close: bool,
@@ -27,14 +24,34 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn graphics(&self) -> Weak<Graphics> {
-        Rc::downgrade(&self.graphics)
+    pub fn graphics(&mut self) -> Option<Graphics> {
+        self.graphics.take()
     }
-    pub fn new(title: &str, handler: Option<Box<dyn EventHandler>>) -> Window {
+    pub fn return_graphics(&mut self, graphics: Option<Graphics>) {
+        self.graphics = graphics;
+    }
+    pub fn graphics_width(&self) -> Option<u32> {
+        match &self.graphics {
+            Some(graphics) => Some(graphics.width()),
+            None => None,
+        }
+    }
+    pub fn graphics_height(&self) -> Option<u32> {
+        match &self.graphics {
+            Some(graphics) => Some(graphics.height()),
+            None => None,
+        }
+    }
+    pub fn new(
+        title: &str,
+        handler: Option<Box<dyn EventHandler>>,
+        graphics_width: u32,
+        graphics_height: u32,
+    ) -> Window {
         let internals = Some(internals::Data::new(title));
-        let graphics = Rc::new(Graphics::new(512, 256));
+        let graphics = Some(Graphics::new(graphics_width, graphics_height));
         let rectangle = Rectangle::new(0, 0, 0, 0);
-        let size_ratio = 2. / 1.;
+        let size_ratio = graphics_width as f64 / graphics_height as f64;
         Window {
             size_ratio,
             rectangle,
@@ -77,8 +94,18 @@ impl Window {
             self.rectangle.position.y = excess / 2;
         }
     }
-    pub fn pixels_ptr(&self) -> *const c_void {
-        let vector = unsafe { &*self.graphics.pixels().as_ptr() };
-        vector.as_ptr() as *const c_void
+    pub fn pixels(&mut self) -> Option<Vec<u8>> {
+        match &mut self.graphics {
+            Some(graphics) => graphics.pixels(),
+            None => None,
+        }
+    }
+    pub fn return_pixels(&mut self, pixels: Option<Vec<u8>>) {
+        match &mut self.graphics {
+            Some(graphics) => {
+                graphics.return_pixels(pixels);
+            }
+            None => {}
+        }
     }
 }
