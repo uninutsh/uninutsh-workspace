@@ -29,12 +29,17 @@ impl Cell {
 }
 
 struct Nutshell {
+    top_cells: Vec<Cell>,
+    top_back_cells: Vec<Cell>,
     cells: Vec<Cell>,
     back_cells: Vec<Cell>,
     size: Vector2<u32>,
     colors: u64,
     saturations: u64,
     brightnessess: u64,
+    color_fashion: Vec<u64>,
+    saturation_fashion: Vec<u64>,
+    brightness_fashion: Vec<u64>,
 }
 
 impl Nutshell {
@@ -60,7 +65,6 @@ impl Nutshell {
         for _y in 0..side_length {
             position = row_pos;
             for _x in 0..side_length {
-                /*
                 let mut dis_x;
                 if center.x > position.x {
                     dis_x = center.x - position.x;
@@ -82,7 +86,7 @@ impl Nutshell {
                 if dis_x + dis_y <= radius {
                     neighborhood.push(position);
                 }
-                */
+
                 neighborhood.push(position);
                 position = self.rigth_pos(position.x, position.y);
             }
@@ -99,22 +103,42 @@ impl Nutshell {
         radius: u32,
     ) -> Nutshell {
         let size = Vector2::new(width, height);
+        let mut top_cells = Vec::with_capacity(width as usize * height as usize);
+        let mut top_back_cells = Vec::with_capacity(width as usize * height as usize);
         let mut cells = Vec::with_capacity(width as usize * height as usize);
         let mut back_cells = Vec::with_capacity(width as usize * height as usize);
         for y in 0..height {
             for x in 0..width {
                 cells.push(Cell::new(x, y, 0, 0, 0));
                 back_cells.push(Cell::new(x, y, 0, 0, 0));
+                top_cells.push(Cell::new(x, y, 0, 0, 0));
+                top_back_cells.push(Cell::new(x, y, 0, 0, 0));
             }
         }
-
+        let mut color_fashion = Vec::with_capacity(colors as usize);
+        let mut saturation_fashion = Vec::with_capacity(saturations as usize);
+        let mut brightness_fashion = Vec::with_capacity(brightnessess as usize);
+        for _i in 0..colors {
+            color_fashion.push(0);
+        }
+        for _i in 0..saturations {
+            saturation_fashion.push(0);
+        }
+        for _i in 0..brightnessess {
+            brightness_fashion.push(0);
+        }
         let mut nutshell = Nutshell {
+            top_cells,
+            top_back_cells,
             cells,
             back_cells,
             size,
             colors,
             saturations,
             brightnessess,
+            color_fashion,
+            saturation_fashion,
+            brightness_fashion,
         };
         for y in 0..height {
             for x in 0..width {
@@ -176,6 +200,50 @@ impl Nutshell {
     fn up_pos(&self, x: u32, y: u32) -> Vector2<u32> {
         Vector2::new(x, self.up(y))
     }
+    fn post_at(&mut self, x: u32, y: u32) {
+        let neighborhood = self.neighborhood(x, y, 4);
+        for i in 0..self.colors {
+            self.color_fashion[i as usize] = 0;
+        }
+        for i in 0..self.saturations {
+            self.saturation_fashion[i as usize] = 0;
+        }
+        for i in 0..self.brightnessess {
+            self.brightness_fashion[i as usize] = 0;
+        }
+        for neighbor in neighborhood {
+            let index = self.index_at(neighbor.x, neighbor.y);
+            let color = self.top_back_cells[index].color;
+            let saturation = self.top_back_cells[index].saturation;
+            let brightness = self.top_back_cells[index].brightness;
+            self.color_fashion[color as usize] += 1;
+            self.saturation_fashion[saturation as usize] += 1;
+            self.brightness_fashion[brightness as usize] += 1;
+        }
+        let mut color = 0;
+        for i in 0..self.colors {
+            if self.color_fashion[i as usize] > self.color_fashion[color as usize] {
+                color = i;
+            }
+        }
+        let mut saturation = 0;
+        for i in 0..self.saturations {
+            if self.saturation_fashion[i as usize] > self.saturation_fashion[saturation as usize] {
+                saturation = i;
+            }
+        }
+        let mut brightness = 0;
+        for i in 0..self.brightnessess {
+            if self.brightness_fashion[i as usize] > self.brightness_fashion[brightness as usize] {
+                brightness = i;
+            }
+        }
+        let index = self.index_at(x, y);
+        self.top_cells[index].color = color;
+        self.top_cells[index].saturation = saturation;
+        self.top_cells[index].brightness = brightness;
+    }
+
     fn iterate_at(&mut self, x: u32, y: u32) {
         let index = self.index_at(x, y);
         let mut color = self.back_cells[index].color;
@@ -190,12 +258,29 @@ impl Nutshell {
         self.cells[index].color = color % self.colors;
         self.cells[index].saturation = saturation % self.saturations;
         self.cells[index].brightness = brightness % self.brightnessess;
+        if self.cells[index].color == 0 {
+            self.top_back_cells[index].color += 1;
+            self.top_back_cells[index].color %= self.colors;
+        }
+        if self.cells[index].saturation == 0 {
+            self.top_back_cells[index].saturation += 1;
+            self.top_back_cells[index].saturation %= self.saturations;
+        }
+        if self.cells[index].brightness == 0 {
+            self.top_back_cells[index].brightness += 1;
+            self.top_back_cells[index].brightness %= self.brightnessess;
+        }
     }
     fn iterate(&mut self) {
         self.fill_back();
         for y in 0..self.size.y {
             for x in 0..self.size.x {
                 self.iterate_at(x, y);
+            }
+        }
+        for y in 0..self.size.y {
+            for x in 0..self.size.x {
+                self.post_at(x, y);
             }
         }
     }
@@ -210,7 +295,7 @@ impl NutshellManager {
     fn new() -> NutshellManager {
         let width = 127;
         let height = 63;
-        let mut nutshell = Nutshell::new(width, height, 5, 4, 3, 1);
+        let mut nutshell = Nutshell::new(width, height, 15, 15, 15, 1);
 
         //nutshell.set_color_at(width / 2 - 1, height / 2 - 1, 1);
         //nutshell.set_color_at(width / 2 - 1, height / 2, 1);
@@ -230,8 +315,8 @@ impl EventHandler for NutshellManager {
     fn handle_event(&mut self, event: WindowEvent, window: &mut Window) {
         match event {
             WindowEvent::Update(delta) => {
-                if self.delta >= Duration::from_millis(20 * 25) {
-                    //println!("delta {}", self.delta.as_millis());
+                if self.delta >= Duration::from_millis(20 * 10) {
+                    println!("delta {}", self.delta.as_millis());
                     self.nutshell.iterate();
                     window.redraw();
                     self.delta = Duration::from_secs(0);
@@ -247,16 +332,16 @@ impl EventHandler for NutshellManager {
                 for y in 0..self.nutshell.size.y {
                     for x in 0..self.nutshell.size.x {
                         let index = self.nutshell.index_at(x, y);
-                        let color_level = self.nutshell.cells[index].color;
-                        let saturation_level = self.nutshell.cells[index].saturation;
-                        let brightness_level = self.nutshell.cells[index].brightness;
+                        let color_level = self.nutshell.top_cells[index].color;
+                        let saturation_level = self.nutshell.top_cells[index].saturation;
+                        let brightness_level = self.nutshell.top_cells[index].brightness;
                         let hue = color_level as f64 / self.nutshell.colors as f64;
                         let saturation =
                             saturation_level as f64 / (self.nutshell.saturations - 1) as f64;
                         let brightness =
                             brightness_level as f64 / (self.nutshell.brightnessess - 1) as f64;
                         let color = Color::from_hsb(
-                            [(hue * 360. + 180.) % 360., saturation, brightness],
+                            [(hue * 360. + 180.) % 360., saturation, 1. - brightness],
                             255,
                         );
                         graphics.set_color(color);
