@@ -10,16 +10,20 @@ struct Cell {
     _position: Vector2<u32>,
     neighbors: Vec<Vector2<u32>>,
     color: u64,
+    saturation: u64,
+    brightness: u64,
 }
 
 impl Cell {
-    fn new(width: u32, height: u32, color: u64) -> Cell {
+    fn new(width: u32, height: u32, color: u64, saturation: u64, brightness: u64) -> Cell {
         let position = Vector2::new(width, height);
         let neighbors = Vec::with_capacity(16);
         Cell {
             _position: position,
             neighbors,
             color,
+            saturation,
+            brightness,
         }
     }
 }
@@ -28,8 +32,9 @@ struct Nutshell {
     cells: Vec<Cell>,
     back_cells: Vec<Cell>,
     size: Vector2<u32>,
-    colors_count: u64,
-    colors: Vec<Color>,
+    colors: u64,
+    saturations: u64,
+    brightnessess: u64,
 }
 
 impl Nutshell {
@@ -85,44 +90,35 @@ impl Nutshell {
         }
         neighborhood
     }
-    fn new(width: u32, height: u32, colors_count: u64, radius: u32) -> Nutshell {
+    fn new(
+        width: u32,
+        height: u32,
+        colors: u64,
+        saturations: u64,
+        brightnessess: u64,
+        radius: u32,
+    ) -> Nutshell {
         let size = Vector2::new(width, height);
         let mut cells = Vec::with_capacity(width as usize * height as usize);
         let mut back_cells = Vec::with_capacity(width as usize * height as usize);
         for y in 0..height {
             for x in 0..width {
-                cells.push(Cell::new(x, y, 0));
-                back_cells.push(Cell::new(x, y, 0));
+                cells.push(Cell::new(x, y, 0, 0, 0));
+                back_cells.push(Cell::new(x, y, 0, 0, 0));
             }
         }
-        let mut colors = Vec::with_capacity(colors_count as usize);
-        let mut value = 0.;
-        let adder = 1. / (colors_count - 1) as f64;
-        for _ci in 0..colors_count {
-            colors.push(Color::from_hsb([180., 1. / 1., value], 255));
-            value += adder;
-        }
+
         let mut nutshell = Nutshell {
             cells,
             back_cells,
             size,
-            colors_count,
             colors,
+            saturations,
+            brightnessess,
         };
-        //let line = width / 4;
-        //let anti_line = width - 1 - line;
         for y in 0..height {
             for x in 0..width {
                 let neighborhood = nutshell.neighborhood(x, y, radius);
-                /*
-                if y % 64 == 0 {
-                    if x == line {
-                        neighbors.push(Vector2::new(anti_line, y));
-                    } else if x == anti_line {
-                        neighbors.push(Vector2::new(line, y));
-                    }
-                }
-                */
                 nutshell.add_neighbors(x, y, neighborhood);
             }
         }
@@ -131,30 +127,16 @@ impl Nutshell {
     fn index_at(&self, x: u32, y: u32) -> usize {
         y as usize * self.size.x as usize + x as usize
     }
-    fn set_color_at(&mut self, x: u32, y: u32, color: u64) {
-        let index = self.index_at(x, y);
-        self.cells[index].color = color % self.colors_count;
-    }
-    fn set_back_color_at(&mut self, x: u32, y: u32, color: u64) {
-        let index = self.index_at(x, y);
-        self.back_cells[index].color = color % self.colors_count;
-    }
-    fn back_color(&self, position: Vector2<u32>) -> u64 {
-        self.back_color_at(position.x, position.y)
-    }
-    fn back_color_at(&self, x: u32, y: u32) -> u64 {
-        let index = self.index_at(x, y);
-        self.back_cells[index].color
-    }
-    fn color_at(&self, x: u32, y: u32) -> u64 {
-        let index = self.index_at(x, y);
-        self.cells[index].color
-    }
     fn fill_back(&mut self) {
         for y in 0..self.size.y {
             for x in 0..self.size.x {
-                let color = self.color_at(x, y);
-                self.set_back_color_at(x, y, color);
+                let index = self.index_at(x, y);
+                let color = self.cells[index].color;
+                self.back_cells[index].color = color;
+                let saturation = self.cells[index].saturation;
+                self.back_cells[index].saturation = saturation;
+                let brightness = self.cells[index].brightness;
+                self.back_cells[index].brightness = brightness;
             }
         }
     }
@@ -194,20 +176,26 @@ impl Nutshell {
     fn up_pos(&self, x: u32, y: u32) -> Vector2<u32> {
         Vector2::new(x, self.up(y))
     }
-    fn get_sum(&self, x: u32, y: u32) -> u64 {
+    fn iterate_at(&mut self, x: u32, y: u32) {
         let index = self.index_at(x, y);
-        let mut sum = self.back_cells[index].color;
+        let mut color = self.back_cells[index].color;
+        let mut saturation = self.back_cells[index].saturation;
+        let mut brightness = self.back_cells[index].brightness;
         for neighbor in &self.back_cells[index].neighbors {
-            sum += self.back_color(*neighbor);
+            let index = self.index_at(neighbor.x, neighbor.y);
+            color += self.back_cells[index].color;
+            saturation += self.back_cells[index].saturation;
+            brightness += self.back_cells[index].brightness;
         }
-        sum
+        self.cells[index].color = color % self.colors;
+        self.cells[index].saturation = saturation % self.saturations;
+        self.cells[index].brightness = brightness % self.brightnessess;
     }
     fn iterate(&mut self) {
         self.fill_back();
         for y in 0..self.size.y {
             for x in 0..self.size.x {
-                let sum = self.get_sum(x, y);
-                self.set_color_at(x, y, sum);
+                self.iterate_at(x, y);
             }
         }
     }
@@ -220,15 +208,17 @@ struct NutshellManager {
 
 impl NutshellManager {
     fn new() -> NutshellManager {
-        let width = 63;
+        let width = 127;
         let height = 63;
-        let mut nutshell = Nutshell::new(width, height, 4, 2);
+        let mut nutshell = Nutshell::new(width, height, 5, 4, 3, 1);
 
         //nutshell.set_color_at(width / 2 - 1, height / 2 - 1, 1);
         //nutshell.set_color_at(width / 2 - 1, height / 2, 1);
         //nutshell.set_color_at(width / 2, height / 2 - 1, 1);
-        nutshell.set_color_at(width / 2, height / 2, 1);
-
+        let index = nutshell.index_at(width / 2, height / 2);
+        nutshell.cells[index].color = 1;
+        nutshell.cells[index].saturation = 1;
+        nutshell.cells[index].brightness = 1;
         NutshellManager {
             nutshell,
             delta: Duration::from_secs(0),
@@ -240,7 +230,7 @@ impl EventHandler for NutshellManager {
     fn handle_event(&mut self, event: WindowEvent, window: &mut Window) {
         match event {
             WindowEvent::Update(delta) => {
-                if self.delta >= Duration::from_millis(20 * 50) {
+                if self.delta >= Duration::from_millis(20 * 25) {
                     //println!("delta {}", self.delta.as_millis());
                     self.nutshell.iterate();
                     window.redraw();
@@ -256,8 +246,19 @@ impl EventHandler for NutshellManager {
                 let mut graphics = window.graphics().expect("Can not find the graphics object");
                 for y in 0..self.nutshell.size.y {
                     for x in 0..self.nutshell.size.x {
-                        let color_level = self.nutshell.color_at(x, y);
-                        let color = self.nutshell.colors[color_level as usize];
+                        let index = self.nutshell.index_at(x, y);
+                        let color_level = self.nutshell.cells[index].color;
+                        let saturation_level = self.nutshell.cells[index].saturation;
+                        let brightness_level = self.nutshell.cells[index].brightness;
+                        let hue = color_level as f64 / self.nutshell.colors as f64;
+                        let saturation =
+                            saturation_level as f64 / (self.nutshell.saturations - 1) as f64;
+                        let brightness =
+                            brightness_level as f64 / (self.nutshell.brightnessess - 1) as f64;
+                        let color = Color::from_hsb(
+                            [(hue * 360. + 180.) % 360., saturation, brightness],
+                            255,
+                        );
                         graphics.set_color(color);
                         graphics.put(x, y);
                     }
