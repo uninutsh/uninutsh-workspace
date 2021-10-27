@@ -157,7 +157,7 @@ impl Data {
                     }
                     let pixels = window.pixels().expect("can not take the pixels for updating");
                     unsafe {
-                        gl::ClearColor(0., 0., 0., 1.);
+                        gl::ClearColor(1./2., 1./2., 1./2., 1.);
                         panic_gl("gl::ClearColor");
 
                         gl::Clear(gl::COLOR_BUFFER_BIT);
@@ -199,7 +199,7 @@ impl Data {
                 _ => (),
             }
             let delta = last_update_instant.elapsed();
-            if delta >= Duration::from_millis(16) && !window.must_close {
+            if delta >= Duration::from_millis(20) && !window.must_close {
                 match &mut event_handler {
                     Some(handler) => {
                         handler.handle_event(super::WindowEvent::Update(delta), &mut window);
