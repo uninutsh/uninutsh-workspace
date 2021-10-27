@@ -1,4 +1,5 @@
 use gl::types::GLuint;
+//use glutin::window::Fullscreen;
 use glutin::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{Event, WindowEvent},
@@ -6,7 +7,10 @@ use glutin::{
     window::{Window, WindowBuilder},
     ContextBuilder, ContextWrapper, PossiblyCurrent,
 };
-use std::{ffi::c_void, time::{Duration, Instant}};
+use std::{
+    ffi::c_void,
+    time::{Duration, Instant},
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum CustomEvent {}
@@ -60,6 +64,7 @@ impl Data {
         let x = monitor.size().width / 2 - width / 2;
         let y = monitor.size().height / 2 - height / 2;
         let window_builder = WindowBuilder::new()
+            //.with_fullscreen(Some(Fullscreen::Borderless(None)))
             .with_title(title)
             .with_inner_size(PhysicalSize::new(width, height))
             .with_position(PhysicalPosition::new(x, y))
@@ -99,8 +104,12 @@ impl Data {
     pub fn event_loop(mut self, mut window: super::Window) {
         let event_loop = self.event_loop.take().unwrap();
         let _proxy = self.proxy.take().unwrap();
-        let sprite_width = window.graphics_width().expect("Can not find graphics object") as i32;
-        let sprite_height = window.graphics_height().expect("Can not find graphics object") as i32;
+        let sprite_width = window
+            .graphics_width()
+            .expect("Can not find graphics object") as i32;
+        let sprite_height = window
+            .graphics_height()
+            .expect("Can not find graphics object") as i32;
         let size = self.gl_window.window().inner_size();
         window.update_rectangle(size.width as i32, size.height as i32);
         let mut event_handler = window.handler.take();
@@ -155,9 +164,11 @@ impl Data {
                         }
                         None => {}
                     }
-                    let pixels = window.pixels().expect("can not take the pixels for updating");
+                    let pixels = window
+                        .pixels()
+                        .expect("can not take the pixels for updating");
                     unsafe {
-                        gl::ClearColor(1./2., 1./2., 1./2., 1.);
+                        gl::ClearColor(0. / 2., 0. / 2., 0. / 2., 1.);
                         panic_gl("gl::ClearColor");
 
                         gl::Clear(gl::COLOR_BUFFER_BIT);
