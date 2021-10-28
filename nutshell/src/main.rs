@@ -1,9 +1,21 @@
+use cpal::traits::DeviceTrait;
+use cpal::traits::HostTrait;
+use cpal::traits::StreamTrait;
+use cpal::Sample;
+use cpal::SampleRate;
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
 use std::time::Duration;
 use uninutsh::image::Color;
 use uninutsh::ui::window::EventHandler;
 use uninutsh::ui::window::Window;
 use uninutsh::ui::window::WindowEvent;
 use uninutsh::Vector2;
+
+enum Message {
+    NeedData,
+}
 
 #[derive(Clone)]
 struct Cell {
@@ -213,7 +225,7 @@ impl Nutshell {
         Vector2::new(x, self.up(y))
     }
     fn post_at(&mut self, x: u32, y: u32) {
-        let neighborhood = self.neighborhood(x, y, 2);
+        let neighborhood = self.neighborhood(x, y, 1);
         let mut color = 0;
         let mut saturation = 0;
         let mut brightness = 0;
@@ -230,7 +242,7 @@ impl Nutshell {
         self.post_cells[index].brightness = brightness / neighborhood.len() as u64;
     }
     fn top_at(&mut self, x: u32, y: u32) {
-        let neighborhood = self.neighborhood(x, y, 2);
+        let neighborhood = self.neighborhood(x, y, 1);
         for i in 0..self.colors {
             self.color_fashion[i as usize] = 0;
         }
@@ -312,6 +324,7 @@ impl Nutshell {
                 self.top_at(x, y);
             }
         }
+
         /*
         for y in 0..self.size.y {
             for x in 0..self.size.x {
@@ -325,27 +338,133 @@ impl Nutshell {
 struct NutshellManager {
     nutshell: Nutshell,
     _delta: Duration,
+    sender: Sender<f32>,
+    receiver: Receiver<Message>,
+    color_pointer: Vector2<u32>,
+    saturation_pointer: Vector2<u32>,
+    brightness_pointer: Vector2<u32>,
 }
 
 impl NutshellManager {
-    fn new() -> NutshellManager {
-        let width = 64 + 32 - 1;
-        let height = 32 + 16 - 1;
-        let a = 32;
-        let b = 2;
-        let mut nutshell = Nutshell::new(width, height, a, a, a, b, b, b, 2);
+    fn new(sender: Sender<f32>, receiver: Receiver<Message>) -> NutshellManager {
+        let width = 128;
+        let height = 128;
+        let a = 64;
+        //let b = 4;
+        let mut nutshell = Nutshell::new(width, height, 16, 16, 16, 8, 8, 8, 1);
 
         //nutshell.set_color_at(width / 2 - 1, height / 2 - 1, 1);
         //nutshell.set_color_at(width / 2 - 1, height / 2, 1);
         //nutshell.set_color_at(width / 2, height / 2 - 1, 1);
-        let index = nutshell.index_at(width / 2, height / 2);
+        let index = nutshell.index_at(0, 0);
         nutshell.cells[index].color = 1;
         nutshell.cells[index].saturation = 1;
         nutshell.cells[index].brightness = 1;
         NutshellManager {
             nutshell,
             _delta: Duration::from_secs(0),
+            sender,
+            receiver,
+            color_pointer: Vector2::new(0, 0),
+            saturation_pointer: Vector2::new(0, 0),
+            brightness_pointer: Vector2::new(0, 0),
         }
+    }
+    fn next_color_sample(&mut self) -> f32 {
+        let index = self
+            .nutshell
+            .index_at(self.color_pointer.x, self.color_pointer.y);
+        let color = self.nutshell.top_cells[index].color;
+        let dir_sum = color;
+        let color = color as f32 / (self.nutshell.colors - 1) as f32;
+        let dir = dir_sum % 2;
+        match dir {
+            0 => {
+                self.color_pointer = self
+                    .nutshell
+                    .rigth_pos(self.color_pointer.x, self.color_pointer.y)
+            }
+            1 => {
+                self.color_pointer = self
+                    .nutshell
+                    .down_pos(self.color_pointer.x, self.color_pointer.y)
+            }
+            2 => {
+                self.color_pointer = self
+                    .nutshell
+                    .left_pos(self.color_pointer.x, self.color_pointer.y)
+            }
+            _ => {
+                self.color_pointer = self
+                    .nutshell
+                    .up_pos(self.color_pointer.x, self.color_pointer.y)
+            }
+        }
+        color * 2.0 - 1.0
+    }
+    fn next_saturation_sample(&mut self) -> f32 {
+        let index = self
+            .nutshell
+            .index_at(self.saturation_pointer.x, self.saturation_pointer.y);
+        let saturation = self.nutshell.top_cells[index].saturation;
+        let dir_sum = saturation;
+        let saturation = saturation as f32 / (self.nutshell.saturations - 1) as f32;
+        let dir = dir_sum % 2;
+        match dir {
+            0 => {
+                self.saturation_pointer = self
+                    .nutshell
+                    .rigth_pos(self.saturation_pointer.x, self.saturation_pointer.y)
+            }
+            1 => {
+                self.saturation_pointer = self
+                    .nutshell
+                    .down_pos(self.saturation_pointer.x, self.saturation_pointer.y)
+            }
+            2 => {
+                self.saturation_pointer = self
+                    .nutshell
+                    .left_pos(self.saturation_pointer.x, self.saturation_pointer.y)
+            }
+            _ => {
+                self.saturation_pointer = self
+                    .nutshell
+                    .up_pos(self.saturation_pointer.x, self.saturation_pointer.y)
+            }
+        }
+        saturation * 2.0 - 1.0
+    }
+    fn next_brightness_sample(&mut self) -> f32 {
+        let index = self
+            .nutshell
+            .index_at(self.brightness_pointer.x, self.brightness_pointer.y);
+        let brightness = self.nutshell.top_cells[index].brightness;
+        let dir_sum = brightness;
+        let brightness = brightness as f32 / (self.nutshell.brightnessess - 1) as f32;
+        let dir = dir_sum % 2;
+        match dir {
+            0 => {
+                self.brightness_pointer = self
+                    .nutshell
+                    .rigth_pos(self.brightness_pointer.x, self.brightness_pointer.y)
+            }
+            1 => {
+                self.brightness_pointer = self
+                    .nutshell
+                    .down_pos(self.brightness_pointer.x, self.brightness_pointer.y)
+            }
+            2 => {
+                self.brightness_pointer = self
+                    .nutshell
+                    .left_pos(self.brightness_pointer.x, self.brightness_pointer.y)
+            }
+            _ => {
+                self.brightness_pointer = self
+                    .nutshell
+                    .up_pos(self.brightness_pointer.x, self.brightness_pointer.y)
+            }
+        }
+        brightness * 2.0 - 1.0
     }
 }
 
@@ -355,8 +474,24 @@ impl EventHandler for NutshellManager {
             WindowEvent::Update(_delta) => {
                 //if self.delta >= Duration::from_millis(0) {
                 //println!("delta {}", self.delta.as_millis());
-                self.nutshell.iterate();
-                window.redraw();
+                match self.receiver.try_recv() {
+                    Ok(message) => match message {
+                        Message::NeedData => {
+                            //self.pointer = Vector2::new(0, 0);
+                            for _i in 0..LENGTH {
+                                let color = self.next_color_sample();
+                                let saturation = self.next_saturation_sample();
+                                let brightness = self.next_brightness_sample();
+                                let sample = (color + saturation + brightness) / 3.0;
+                                self.sender.send(sample).unwrap();
+                            }
+                            self.nutshell.iterate();
+                            window.redraw();
+                        }
+                    },
+                    Err(_err) => {}
+                }
+
                 //self.delta = Duration::from_secs(0);
                 //}
                 //self.delta += delta;
@@ -379,7 +514,7 @@ impl EventHandler for NutshellManager {
                         let brightness =
                             brightness_level as f64 / (self.nutshell.brightnessess - 1) as f64;
                         let color =
-                            Color::from_hsb([hue * 360., saturation, 1.0 - brightness], 255);
+                            Color::from_hsb([hue * 360. + 270., saturation, 1.0 - brightness], 255);
                         graphics.set_color(color);
                         graphics.put(x, y);
                     }
@@ -390,9 +525,61 @@ impl EventHandler for NutshellManager {
         }
     }
 }
+const LENGTH: usize = 48000 / 2;
 
 fn main() {
-    let manager = NutshellManager::new();
+    let mut samples = Vec::with_capacity(LENGTH);
+    for _i in 0..LENGTH {
+        samples.push(0.0);
+    }
+    let mut first_time = true;
+    let mut si = 0;
+    let (sa, ra) = mpsc::channel();
+    let (sb, rb) = mpsc::channel();
+    let host = cpal::default_host();
+    let device = host
+        .default_output_device()
+        .expect("no output device available");
+    let mut supported_configs_range = device
+        .supported_output_configs()
+        .expect("error while querying configs");
+    let supported_config = supported_configs_range
+        .next()
+        .expect("no supported config?!")
+        .with_sample_rate(SampleRate(48000))
+        .config();
+    let stream = device
+        .build_output_stream(
+            &supported_config,
+            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                // react to stream events and read or write stream data here.
+                //sb.send(Message::NeedData).unwrap();
+                if first_time {
+                    sb.send(Message::NeedData).unwrap();
+                    first_time = false;
+                }
+                for sample in data.iter_mut() {
+                    if si == 0 {
+                        for i in 0..LENGTH {
+                            samples[i] = ra.recv().unwrap()
+                        }
+                    }
+                    *sample = Sample::from(&samples[si]);
+                    si += 1;
+                    if si >= LENGTH {
+                        sb.send(Message::NeedData).unwrap();
+                        si = 0;
+                    }
+                    //let data = ;
+                }
+            },
+            move |_err| {
+                // react to errors here.
+            },
+        )
+        .unwrap();
+    stream.play().unwrap();
+    let manager = NutshellManager::new(sa, rb);
     let width = manager.nutshell.size.x;
     let height = manager.nutshell.size.y;
     let window = Window::new("Nutshell", Some(Box::new(manager)), width, height);
