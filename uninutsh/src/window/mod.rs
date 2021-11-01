@@ -1,6 +1,6 @@
 mod internals;
 use crate::image::Graphics;
-use crate::Rectangle;
+use crate::{Rectangle, Vector2};
 use std::time::Duration;
 
 pub enum WindowEvent {
@@ -11,6 +11,13 @@ pub enum WindowEvent {
 
 pub trait EventHandler {
     fn handle_event(&mut self, event: WindowEvent, window: &mut Window);
+}
+
+pub struct WindowOptions {
+    pub update_delta: Duration,
+    pub title: String,
+    pub size: Vector2<u32>,
+    pub graphics_size: Vector2<u32>,
 }
 
 pub struct Window {
@@ -43,21 +50,19 @@ impl Window {
         }
     }
     pub fn new(
-        title: &str,
-        handler: Option<Box<dyn EventHandler>>,
-        graphics_width: u32,
-        graphics_height: u32,
+        options: WindowOptions,
+        handler: Box<dyn EventHandler>,
     ) -> Window {
-        let internals = Some(internals::Data::new(title));
-        let graphics = Some(Graphics::new(graphics_width, graphics_height));
+        let internals = Some(internals::Data::new(options.title, options.size, options.update_delta));
+        let graphics = Some(Graphics::new(options.graphics_size.x, options.graphics_size.y));
         let rectangle = Rectangle::new(0, 0, 0, 0);
-        let size_ratio = graphics_width as f64 / graphics_height as f64;
+        let size_ratio = options.graphics_size.x as f64 / options.graphics_size.y as f64;
         Window {
             size_ratio,
             rectangle,
             graphics,
             internals,
-            handler,
+            handler: Some(handler),
             must_close: false,
             must_redraw: false,
         }

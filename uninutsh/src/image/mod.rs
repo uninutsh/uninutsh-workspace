@@ -111,7 +111,7 @@ impl Sprite {
 }
 
 pub struct SpritesManager {
-    dictionary: HashMap<String, Option<Sprite>>,
+    dictionary: HashMap<String, Sprite>,
 }
 
 impl SpritesManager {
@@ -121,12 +121,11 @@ impl SpritesManager {
     }
     pub fn put(&mut self, name: &str, path: PathBuf) {
         self.dictionary
-            .insert(name.to_string(), Some(Sprite::load(path)));
+            .insert(name.to_string(), Sprite::load(path));
     }
-    pub fn get(&mut self, name: &str) -> Option<Sprite> {
+    pub fn get(&mut self, name: &str) -> &mut Sprite {
         self.dictionary
             .get_mut(name)
             .expect("SpritesManager::get")
-            .take()
     }
 }

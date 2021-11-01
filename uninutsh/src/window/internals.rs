@@ -12,10 +12,13 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::Vector2;
+
 #[derive(Debug, Clone, Copy)]
 pub enum CustomEvent {}
 
 pub struct Data {
+    update_delta: Duration,
     texture: GLuint,
     framebuffer: GLuint,
     event_loop: Option<EventLoop<CustomEvent>>,
@@ -55,12 +58,12 @@ fn panic_gl(string: &str) {
 }
 
 impl Data {
-    pub fn new(title: &str) -> Data {
+    pub fn new(title: String, size: Vector2<u32>, update_delta: Duration) -> Data {
         let el = EventLoop::<CustomEvent>::with_user_event();
         let proxy = Some(el.create_proxy());
         let monitor = el.primary_monitor().unwrap();
-        let width = 1280; //
-        let height = 720;
+        let width = size.x; //
+        let height = size.y;
         let x = monitor.size().width / 2 - width / 2;
         let y = monitor.size().height / 2 - height / 2;
         let window_builder = WindowBuilder::new()
@@ -99,6 +102,7 @@ impl Data {
             event_loop,
             proxy,
             gl_window,
+            update_delta,
         }
     }
     pub fn event_loop(mut self, mut window: super::Window) {
@@ -210,7 +214,7 @@ impl Data {
                 _ => (),
             }
             let delta = last_update_instant.elapsed();
-            if delta >= Duration::from_millis(20) && !window.must_close {
+            if delta >= self.update_delta && !window.must_close {
                 match &mut event_handler {
                     Some(handler) => {
                         handler.handle_event(super::WindowEvent::Update(delta), &mut window);

@@ -1,6 +1,8 @@
 //#![allow(warnings)]
 pub mod image;
-pub mod ui;
+pub mod window;
+pub mod audio;
+pub mod nutshell;
 
 #[derive(Copy, Clone)]
 pub struct Vector2<T> {
