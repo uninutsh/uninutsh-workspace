@@ -39,11 +39,11 @@ const VIDEO_SAMPLES_PER_SECOND: usize = 2;
 const VIDEO_SAMPLES_LENGHT: usize = VIDEO_SAMPLES_PER_SECOND * SECONDS_PER_FRAME;
 const SECONDS_PER_FRAME: usize = 16;
 const AUDIO_SAMPLES_LENGHT: usize = SAMPLE_RATE as usize * SECONDS_PER_FRAME;
-const VIDEO_SAMPLE_WIDTH: usize = 48;
-const VIDEO_SAMPLE_HEIGHT: usize = 48;
-const LAYERS: usize = 6;
+const VIDEO_SAMPLE_WIDTH: usize = 60;
+const VIDEO_SAMPLE_HEIGHT: usize = 60;
+const LAYERS: usize = 4;
 const SAMPLE_RATE: u32 = 48000;
-const DEFINITION: u64 = 24;
+const DEFINITION: u64 = 12;
 const CHANGE: u64 = 1;
 impl Nutshell {
     fn new(size: Vector2<u32>, layers: usize, definition: u64) -> Nutshell {
@@ -211,7 +211,7 @@ impl Nutshell {
         let layer = 3;
         for y in 0..self.size.y {
             for x in 0..self.size.x {
-                let neighborhood = self.neighborhood(x, y, 1);
+                let neighborhood = self.neighborhood(x, y, 4);
                 let mut cell = Cell {
                     color: 0,
                     saturation: 0,
@@ -248,7 +248,7 @@ impl Nutshell {
                 self.cells[layer][index] = cell;
             }
         }
-        
+        /*
         // layer 4
         let prev_layer = 3;
         let layer = 4;
@@ -333,7 +333,7 @@ impl Nutshell {
                 self.cells[layer][index] = cell;
             }
         }
-        
+        */
     }
 }
 
@@ -375,7 +375,8 @@ impl ProcessingThread {
                 let hue = cell.color as f64 / self.nutshell.definition as f64;
                 let saturation = cell.saturation as f64 / (self.nutshell.definition - 1) as f64;
                 let brightness = cell.brightness as f64 / (self.nutshell.definition - 1) as f64;
-                let color = Color::from_hsb([hue * 360., saturation, 1.0 - brightness], 255);
+                let color =
+                    Color::from_hsb([hue * 360.0 + 180.0, saturation, 1.0 - brightness], 255);
                 pixels.push(color);
             }
         }
@@ -383,8 +384,10 @@ impl ProcessingThread {
     }
     fn color(&mut self) -> u64 {
         let index = self.nutshell.index_at(self.pointer.x, self.pointer.y);
-        let color = self.nutshell.cells[LAYERS - 1][index].color;
-        //color /= 3;
+        let mut color = self.nutshell.cells[LAYERS - 1][index].color
+            + self.nutshell.cells[LAYERS - 1][index].saturation
+            + self.nutshell.cells[LAYERS - 1][index].brightness;
+        color /= 3;
         match color % 3 {
             0 => {
                 self.pointer = self.nutshell.rigth_pos(self.pointer.x, self.pointer.y);
@@ -413,7 +416,7 @@ impl ProcessingThread {
 
         let mut song = Song::new();
         let comp0x0 = InstrumentComponent::new(1.0, generators::sine, 0.0);
-        let comp0x1 = InstrumentComponent::new(1.0, generators::algebraic, 1.0);
+        let comp0x1 = InstrumentComponent::new(1.0, generators::algebraic, 0.0);
         //let comp0x2 = InstrumentComponent::new(1.0, generators::saw, 0.0);
         //let comp0x3 = InstrumentComponent::new(1.0, generators::sigmoid, 0.0);
         //let comp0x4 = InstrumentComponent::new(1.0, generators::square, 0.0);
@@ -469,6 +472,8 @@ impl ProcessingThread {
                 for _i in 0..notes_per_writer {
                     //writer.set_amplitude(1.0 / ((w as f64 + offset) * contrast + 1.0));
                     writer.set_duration(((self.color() % 3) + 1) as f64);
+                    writer.set_amplitude(1.0 / ((self.color() % 4) + 1) as f64);
+
                     //let w_index = writers - w - 1;
                     let w_index = w;
 
@@ -486,7 +491,7 @@ impl ProcessingThread {
                         panic!("timeeee")
                     }
                     writer.set_time(time);
-                    match self.color() % 12 {
+                    match self.color() % 8 {
                         0 => {
                             writer.set_note(self.color() as i64 % 7);
                             let note = writer.note_in_scale();
